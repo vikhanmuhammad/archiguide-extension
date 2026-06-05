@@ -33,23 +33,19 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.StateManager = exports.STACKS = exports.THEMES = void 0;
+exports.StateManager = exports.STACKS = void 0;
 const vscode = __importStar(require("vscode"));
 const DEFAULT_STATE = {
     currentStep: 0,
     projectName: '',
     systemDescription: '',
+    styleDescription: '',
+    referenceFiles: [],
     pages: [],
     selectedStack: '',
-    designToken: { theme: 'indigo', primary: '#6366f1', radius: '8px', font: 'Inter' },
+    designToken: { theme: 'custom', primary: '#6366f1', radius: '8px', font: 'Inter' },
     workspacePath: '',
     initialized: false,
-};
-exports.THEMES = {
-    indigo: { theme: 'indigo', primary: '#6366f1', radius: '8px', font: 'Inter' },
-    emerald: { theme: 'emerald', primary: '#10b981', radius: '6px', font: 'Inter' },
-    rose: { theme: 'rose', primary: '#f43f5e', radius: '10px', font: 'Inter' },
-    slate: { theme: 'slate', primary: '#475569', radius: '4px', font: 'Inter' },
 };
 exports.STACKS = [
     { id: 'laravel-blade', label: 'Laravel + Blade', type: 'Monolith', cmd: 'composer create-project laravel/laravel project' },
@@ -64,7 +60,6 @@ class StateManager {
         this.state = { ...DEFAULT_STATE };
     }
     getState() { return this.state; }
-    getThemes() { return exports.THEMES; }
     getStacks() { return exports.STACKS; }
     // Called once a workspace folder is confirmed open
     async initFromWorkspace() {
@@ -98,10 +93,6 @@ class StateManager {
         this.save();
     }
     setStep(step) { this.update({ currentStep: step }); }
-    setTheme(themeId) {
-        const token = exports.THEMES[themeId] ?? exports.THEMES.indigo;
-        this.update({ designToken: token });
-    }
     /**
      * Show a folder picker so user chooses WHERE to put the project,
      * then create a subfolder named after the project and open it as workspace.
@@ -132,6 +123,7 @@ class StateManager {
                 'docs',
                 'docs/design',
                 'docs/copilot-guides',
+                'docs/references',
                 'project',
             ];
             for (const dir of dirs) {
@@ -148,7 +140,7 @@ class StateManager {
             };
             await vscode.workspace.fs.writeFile(configUri, Buffer.from(JSON.stringify(bootstrap, null, 2)));
             // Write a .gitkeep in each empty folder so git tracks them
-            for (const dir of ['.github', 'docs/design', 'docs/copilot-guides', 'project']) {
+            for (const dir of ['.github', 'docs/design', 'docs/copilot-guides', 'docs/references', 'project']) {
                 await vscode.workspace.fs.writeFile(vscode.Uri.joinPath(projectUri, dir, '.gitkeep'), new Uint8Array(0));
             }
         }

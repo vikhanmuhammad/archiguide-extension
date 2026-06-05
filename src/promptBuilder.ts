@@ -10,8 +10,14 @@ export class PromptBuilder {
 
   // ── Step 1 → FSD.md + flow.md ─────────────────────────────────────────────
   static step1Prompt(state: ProjectState): string {
+    const refSection = state.referenceFiles?.length
+      ? `\n\nDokumen referensi tersedia di workspace — baca sebagai sumber spesifikasi tambahan:\n`
+        + state.referenceFiles.map(f => `#file:${f}`).join('\n')
+      : '';
+
     return `Buat dua file markdown berikut langsung di workspace ini untuk proyek **${state.projectName}**.\n\n`
-      + `**Deskripsi sistem:**\n${state.systemDescription}\n\n`
+      + `**Deskripsi sistem:**\n${state.systemDescription}`
+      + refSection + `\n\n`
       + `Gunakan Bahasa Indonesia. Isi dengan konten nyata dan spesifik — jangan gunakan placeholder.\n\n`
       + `---\n\n`
       + `**File 1: \`docs/FSD.md\`** — Functional Specification Document (untuk stakeholder non-teknis)\n\n`
@@ -28,26 +34,45 @@ export class PromptBuilder {
       + `- **Entitas Data Utama** — setiap entitas/tabel dengan field dan tipe datanya\n`
       + `- **Role & Hak Akses** — setiap role dengan permission spesifiknya\n`
       + `- **Alur Teknis Per Fitur** — per fitur: Input → Proses → Output\n`
-      + `- **Halaman yang Dibutuhkan** — minimal 5 halaman beserta fungsinya`;
+      + `- **Halaman yang Dibutuhkan** — WAJIB tulis dengan format PERSIS berikut (heading dan bullet list):\n\n`
+      + `## Halaman yang Dibutuhkan\n`
+      + `- NamaHalaman1\n`
+      + `- NamaHalaman2\n`
+      + `- NamaHalaman3\n`
+      + `- dst...\n\n`
+      + `Setiap baris hanya berisi nama halaman (1–3 kata, tanpa deskripsi di baris yang sama). Minimal 5 halaman.`;
   }
 
-  // ── Step 2 → design-tokens.json (written directly, no LM needed) ──────────
-  static step2DirectContent(state: ProjectState): string {
-    const t = state.designToken;
-    return JSON.stringify({
-      theme: t.theme,
-      colors: {
-        primary: t.primary,
-        background: '#ffffff',
-        surface: '#f8fafc',
-        text: '#1e293b',
-        textMuted: '#64748b',
-        border: '#e2e8f0',
-      },
-      typography: { fontFamily: t.font, baseSize: '16px' },
-      borderRadius: t.radius,
-      spacing: { base: '8px' },
-    }, null, 2);
+  // ── Step 2 → design-tokens.json via Copilot Agent ─────────────────────────
+  static step2Prompt(state: ProjectState): string {
+    const style = state.styleDescription?.trim()
+      || 'tampilan profesional dan modern, warna biru, font Inter';
+
+    return `Buat file \`.archiguide/design-tokens.json\` langsung di workspace ini.\n\n`
+      + `**Proyek:** ${state.projectName}\n`
+      + `**Style yang diinginkan:** ${style}\n\n`
+      + `Buat file JSON dengan struktur PERSIS seperti ini — isi nilainya berdasarkan deskripsi style di atas:\n\n`
+      + `\`\`\`json\n`
+      + `{\n`
+      + `  "theme": "nama-tema-singkat",\n`
+      + `  "colors": {\n`
+      + `    "primary": "#hex",\n`
+      + `    "background": "#hex",\n`
+      + `    "surface": "#hex",\n`
+      + `    "text": "#hex",\n`
+      + `    "textMuted": "#hex",\n`
+      + `    "border": "#hex"\n`
+      + `  },\n`
+      + `  "typography": {\n`
+      + `    "fontFamily": "nama font, fallback sans-serif",\n`
+      + `    "baseSize": "16px"\n`
+      + `  },\n`
+      + `  "borderRadius": "Xpx",\n`
+      + `  "spacing": { "base": "8px" }\n`
+      + `}\n`
+      + `\`\`\`\n\n`
+      + `Pastikan warna primary memiliki kontras yang baik dengan background dan warna teks. `
+      + `Jika style menyebut dark/gelap, sesuaikan background dan surface ke warna gelap.`;
   }
 
   // ── Step 3 → one HTML page ─────────────────────────────────────────────────

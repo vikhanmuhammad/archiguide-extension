@@ -76,20 +76,55 @@ class SidebarProvider {
                     this.postToWebview({ type: 'showPrompt', prompt: prompt1, nextStep: 2, mode: 'generate' });
                     break;
                 }
-                // ── Step 2: set theme → preview design-tokens (mode: direct) ─────
-                case 'setTheme':
-                    this.state.setTheme(msg.themeId);
+                // ── Step 1: reference file management ────────────────────────────
+                case 'addReferenceFile': {
+                    const folderRef = vscode.workspace.workspaceFolders;
+                    if (!folderRef) {
+                        this.postToast('Tidak ada workspace yang terbuka.', 'error');
+                        break;
+                    }
+                    const picked = await vscode.window.showOpenDialog({
+                        canSelectMany: false,
+                        canSelectFiles: true,
+                        openLabel: 'Pilih dokumen referensi',
+                        filters: { 'Dokumen': ['pdf', 'md', 'txt', 'docx', 'doc', 'png', 'jpg', 'jpeg', 'xlsx', 'csv'] },
+                    });
+                    if (!picked?.length)
+                        break;
+                    const srcUri = picked[0];
+                    const fileName = srcUri.path.split('/').pop() ?? 'reference';
+                    const destPath = `docs/references/${fileName}`;
+                    const destUri = vscode.Uri.joinPath(folderRef[0].uri, destPath);
+                    try {
+                        await vscode.workspace.fs.copy(srcUri, destUri, { overwrite: true });
+                        const refs = this.state.getState().referenceFiles ?? [];
+                        if (!refs.includes(destPath)) {
+                            this.state.update({ referenceFiles: [...refs, destPath] });
+                        }
+                        this.postState();
+                        this.postToast(`"${fileName}" ditambahkan sebagai referensi.`, 'info');
+                    }
+                    catch (err) {
+                        this.postToast('Gagal menyalin file: ' + (err?.message ?? String(err)), 'error');
+                    }
+                    break;
+                }
+                case 'removeReferenceFile': {
+                    const refs = (this.state.getState().referenceFiles ?? []).filter(f => f !== msg.path);
+                    this.state.update({ referenceFiles: refs });
                     this.postState();
                     break;
+                }
+                // ── Step 2: style description → design tokens via Copilot Agent ──
                 case 'submitStep2': {
-                    const tokenContent = promptBuilder_1.PromptBuilder.step2DirectContent(this.state.getState());
-                    this.postToWebview({
-                        type: 'showPrompt',
-                        prompt: tokenContent,
-                        nextStep: 3,
-                        mode: 'direct',
-                        filePath: '.archiguide/design-tokens.json',
-                    });
+                    const { styleDescription } = msg;
+                    if (!styleDescription?.trim()) {
+                        this.postToast('Masukkan deskripsi style terlebih dahulu.', 'warn');
+                        break;
+                    }
+                    this.state.update({ styleDescription });
+                    const prompt2 = promptBuilder_1.PromptBuilder.step2Prompt(this.state.getState());
+                    this.postToWebview({ type: 'showPrompt', prompt: prompt2, nextStep: 3, mode: 'generate' });
                     break;
                 }
                 // ── Step 3: manage pages ──────────────────────────────────────────
@@ -131,6 +166,38 @@ class SidebarProvider {
                 }
                 case 'previewPage': {
                     await this.previewPage(msg.pageName);
+                    break;
+                }
+                // ── Step 3: auto-detect pages from docs ──────────────────────────
+                case 'detectPages': {
+                    const folders3 = vscode.workspace.workspaceFolders;
+                    if (!folders3) {
+                        this.postToast('Tidak ada workspace yang terbuka.', 'warn');
+                        break;
+                    }
+                    let detected = [];
+                    let readFrom = '';
+                    for (const docPath of ['docs/flow.md', 'docs/FSD.md']) {
+                        try {
+                            const raw = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(folders3[0].uri, docPath));
+                            const result = this.parsePagesFromDoc(raw.toString());
+                            if (result.length > 0) {
+                                detected = result;
+                                readFrom = docPath;
+                                break;
+                            }
+                        }
+                        catch (e) {
+                            // file not found or unreadable — try next
+                        }
+                    }
+                    if (detected.length > 0) {
+                        this.postToast(`${detected.length} halaman terdeteksi dari ${readFrom}.`, 'info');
+                    }
+                    else {
+                        this.postToast('Tidak ada halaman terdeteksi. Pastikan docs/flow.md sudah dibuat dan memiliki section "Halaman yang Dibutuhkan".', 'warn');
+                    }
+                    this.postToWebview({ type: 'suggestedPages', pages: detected });
                     break;
                 }
                 // ── Step 4: stack analysis (mode: chat — no file creation) ───────
@@ -233,7 +300,6 @@ class SidebarProvider {
         this._view.webview.postMessage({
             type: 'stateUpdate',
             state: this.state.getState(),
-            themes: this.state.getThemes(),
             stacks: this.state.getStacks(),
             workspaceReady: this.state.workspaceReady(),
         });
@@ -282,6 +348,52 @@ class SidebarProvider {
             // Agent mode not available — fall back to regular chat
             await this.sendToCopilot(prompt);
         }
+    }
+    parsePagesFromDoc(text) {
+        const pages = [];
+        // Find heading — any # level, optional leading number (e.g. "## 5. Halaman...")
+        const headingRe = /^#{1,4}\s+(?:\d+[.)]\s+)?Halaman yang Dibutuhkan/im;
+        const headingMatch = headingRe.exec(text);
+        if (!headingMatch) {
+            return pages;
+        }
+        // Slice to next heading of any level
+        const after = text.slice(headingMatch.index + headingMatch[0].length);
+        const nextHeadingIdx = after.search(/^#{1,4}\s/m);
+        const section = nextHeadingIdx !== -1 ? after.slice(0, nextHeadingIdx) : after;
+        for (const line of section.split('\n')) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) {
+                continue;
+            }
+            let raw = '';
+            if (trimmed.startsWith('|')) {
+                // Table row: | Nama Halaman | Deskripsi |
+                // Skip separator rows like |---|---|
+                const cells = trimmed.split('|').map(s => s.trim()).filter(Boolean);
+                if (cells.length > 0 && !/^[-:]+$/.test(cells[0])) {
+                    raw = cells[0];
+                }
+            }
+            else {
+                // List item: "- Name", "* Name", "1. Name", "1) Name"
+                const m = trimmed.match(/^(?:[-*•]|\d+[.)]) +(.+)$/);
+                if (m) {
+                    raw = m[1];
+                }
+            }
+            if (!raw) {
+                continue;
+            }
+            // Strip markdown formatting
+            let name = raw.replace(/\*\*/g, '').replace(/[*_`]/g, '').trim();
+            // Take only text before separator (em-dash, en-dash, colon, pipe, hyphen + space)
+            name = name.split(/\s+[—–]\s+|\s*[:|\t]\s*|\s{2,}-\s+/)[0].trim();
+            if (name.length >= 2 && name.length <= 50 && !pages.includes(name)) {
+                pages.push(name);
+            }
+        }
+        return pages;
     }
     async previewPage(pageName) {
         const folders = vscode.workspace.workspaceFolders;
@@ -456,9 +568,10 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
 
   function post(msg) { if (vscode) { vscode.postMessage(msg); } }
 
-  let S = null, themes = {}, stacks = [], wsReady = false;
+  let S = null, stacks = [], wsReady = false;
+  let suggestedPages = [];
   // Prompt review state — ephemeral, not persisted
-  let promptPreview = null; // { prompt: string, nextStep: number|null }
+  let promptPreview = null;
   let promptSent = false;
 
   // ── Event delegation — handles ALL clicks and Enter keys ──────────────────
@@ -476,20 +589,26 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
 
   function dispatch(action, data) {
     switch (action) {
-      case 'createWorkspace':  createWorkspace(); break;
-      case 'submitStep1':      submitStep1(); break;
-      case 'setTheme':         post({ type: 'setTheme', themeId: data.theme }); break;
-      case 'submitStep2':      post({ type: 'submitStep2' }); break;
-      case 'openFile':         post({ type: 'openFile', path: data.path }); break;
-      case 'addPage':          addPage(); break;
-      case 'removePage':       post({ type: 'removePage', pageName: data.page }); break;
-      case 'generatePage':     post({ type: 'generatePage', pageName: data.page }); break;
-      case 'previewPage':      post({ type: 'previewPage', pageName: data.page }); break;
-      case 'generateAllPages': post({ type: 'generateAllPages' }); break;
-      case 'analyzeStack':     post({ type: 'analyzeStack' }); break;
-      case 'selectStack':      post({ type: 'selectStack', stackId: data.stack }); break;
-      case 'confirmStack':     post({ type: 'confirmStack' }); break;
-      case 'generateAll':      post({ type: 'generateAll' }); break;
+      case 'createWorkspace':    createWorkspace(); break;
+      case 'submitStep1':        submitStep1(); break;
+      case 'addReferenceFile':   post({ type: 'addReferenceFile' }); break;
+      case 'removeReferenceFile': post({ type: 'removeReferenceFile', path: data.path }); break;
+      case 'submitStep2':        submitStep2(); break;
+      case 'openFile':           post({ type: 'openFile', path: data.path }); break;
+      case 'addPage':            addPage(); break;
+      case 'addSuggestedPage':
+        post({ type: 'addPage', pageName: data.page });
+        suggestedPages = suggestedPages.filter(function(p) { return p !== data.page; });
+        break;
+      case 'detectPages':        post({ type: 'detectPages' }); break;
+      case 'removePage':         post({ type: 'removePage', pageName: data.page }); break;
+      case 'generatePage':       post({ type: 'generatePage', pageName: data.page }); break;
+      case 'previewPage':        post({ type: 'previewPage', pageName: data.page }); break;
+      case 'generateAllPages':   post({ type: 'generateAllPages' }); break;
+      case 'analyzeStack':       post({ type: 'analyzeStack' }); break;
+      case 'selectStack':        post({ type: 'selectStack', stackId: data.stack }); break;
+      case 'confirmStack':       post({ type: 'confirmStack' }); break;
+      case 'generateAll':        post({ type: 'generateAll' }); break;
       case 'goStep':
         promptPreview = null; promptSent = false;
         post({ type: 'setStep', step: parseInt(data.step, 10) });
@@ -524,10 +643,18 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
     const m = e.data;
     if (m.type === 'stateUpdate') {
       const prevStep = S ? S.currentStep : -1;
-      S = m.state; themes = m.themes; stacks = m.stacks; wsReady = m.workspaceReady;
-      // Clear prompt review when step changes (e.g. after manual goStep)
-      if (S.currentStep !== prevStep) { promptPreview = null; promptSent = false; }
+      S = m.state; stacks = m.stacks; wsReady = m.workspaceReady;
+      if (S.currentStep !== prevStep) {
+        promptPreview = null; promptSent = false;
+        // Auto-detect pages when entering step 3
+        if (S.currentStep === 3) { suggestedPages = []; post({ type: 'detectPages' }); }
+      }
       render();
+    }
+    if (m.type === 'suggestedPages') {
+      // Filter out pages already added
+      suggestedPages = (m.pages || []).filter(function(p) { return !(S && S.pages.includes(p)); });
+      renderPanel();
     }
     if (m.type === 'showPrompt') {
       promptPreview = { prompt: m.prompt, nextStep: m.nextStep, mode: m.mode, filePath: m.filePath || null };
@@ -676,42 +803,68 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
 
   /* ── Step 1 ── */
   function renderStep1() {
+    const refs = S.referenceFiles || [];
+    const refRows = refs.map(function(f) {
+      const fname = f.split('/').pop();
+      return '<div class="page-row">'
+        + '<div class="page-left">&#128206; ' + esc(fname) + '</div>'
+        + '<div class="page-actions">'
+        + '<button class="icon-btn" title="Buka" data-action="openFile" data-path="' + esc(f) + '">&#128065;</button>'
+        + '<button class="icon-btn" title="Hapus" data-action="removeReferenceFile" data-path="' + esc(f) + '">&#10005;</button>'
+        + '</div></div>';
+    }).join('');
     return '<div class="sec">Deskripsi sistem</div>'
-      + '<div class="info">Ceritakan sistem yang ingin dibuat. Copilot akan membuat <code>docs/FSD.md</code> dan <code>docs/flow.md</code> berdasarkan deskripsi ini.</div>'
+      + '<div class="info">Ceritakan sistem yang ingin dibuat. Copilot Agent akan membuat <code>docs/FSD.md</code> dan <code>docs/flow.md</code>.</div>'
       + '<label>Nama proyek</label>'
       + '<input id="s1-name" placeholder="contoh: SiKas &#8212; Sistem Kasir Toko" value="' + esc(S.projectName) + '"/>'
       + '<label>Deskripsi sistem</label>'
       + '<textarea id="s1-desc" rows="6" placeholder="Jelaskan sistem: siapa penggunanya, apa yang bisa dilakukan, fitur utama...">' + esc(S.systemDescription) + '</textarea>'
-      + '<button class="btn btn-primary" data-action="submitStep1">Kirim ke Copilot &#8212; buat FSD &amp; flow &#8594;</button>';
+      + '<hr class="divider"/>'
+      + '<div class="sec">Dokumen referensi <span style="font-weight:400;text-transform:none">(opsional)</span></div>'
+      + '<div class="info">Lampirkan spesifikasi, wireframe, atau catatan sebagai sumber tambahan untuk Copilot.</div>'
+      + (refRows || '')
+      + '<button class="btn btn-secondary" data-action="addReferenceFile" style="margin-bottom:8px">+ Lampirkan dokumen referensi</button>'
+      + '<button class="btn btn-primary" data-action="submitStep1">Kirim ke Copilot Agent &#8212; buat FSD &amp; flow &#8594;</button>';
   }
   function submitStep1() {
     post({ type: 'submitStep1',
       projectName: document.getElementById('s1-name').value,
       systemDescription: document.getElementById('s1-desc').value });
   }
+  function submitStep2() {
+    const val = document.getElementById('s2-style');
+    post({ type: 'submitStep2', styleDescription: val ? val.value : '' });
+  }
 
   /* ── Step 2 ── */
   function renderStep2() {
-    const tCards = Object.entries(themes).map(function (entry) {
-      const id = entry[0], t = entry[1];
-      return '<div class="theme-card' + (S.designToken.theme === id ? ' sel' : '') + '" data-action="setTheme" data-theme="' + id + '">'
-        + '<div class="theme-dot" style="background:' + t.primary + '"></div>' + cap(id) + '</div>';
-    }).join('');
     return '<div class="sec">Dokumen</div>'
-      + '<div class="info">Copilot sudah membuat dokumen di <code>docs/</code>. Review, lalu pilih tema visual.</div>'
+      + '<div class="info">Review dokumen yang sudah dibuat, lalu deskripsikan tampilan visual yang Anda inginkan.</div>'
       + '<div class="file-row"><div style="display:flex;align-items:center"><div class="dot dot-done"></div><code>docs/FSD.md</code></div>'
       + '<button class="btn btn-secondary btn-sm" data-action="openFile" data-path="docs/FSD.md">Buka</button></div>'
       + '<div class="file-row"><div style="display:flex;align-items:center"><div class="dot dot-done"></div><code>docs/flow.md</code></div>'
       + '<button class="btn btn-secondary btn-sm" data-action="openFile" data-path="docs/flow.md">Buka</button></div>'
       + '<hr class="divider"/>'
-      + '<div class="sec">Pilih tema</div>'
-      + '<div class="theme-grid">' + tCards + '</div>'
-      + '<button class="btn btn-primary" data-action="submitStep2">Kirim ke Copilot &#8212; simpan design tokens &#8594;</button>'
+      + '<div class="sec">Style visual</div>'
+      + '<div class="info">Deskripsikan warna, font, dan gaya yang diinginkan. Copilot Agent akan membuat <code>.archiguide/design-tokens.json</code>.</div>'
+      + '<textarea id="s2-style" rows="4" placeholder="Contoh: Warna utama biru tua #1e3a5f, tampilan profesional minimalis, sudut sedikit bulat, font Poppins atau Inter">'
+      + esc(S.styleDescription || '') + '</textarea>'
+      + '<button class="btn btn-primary" data-action="submitStep2" style="margin-top:7px">Generate design tokens &#8594;</button>'
       + '<button class="btn btn-secondary" data-action="goStep" data-step="1">&#8592; Kembali</button>';
   }
 
   /* ── Step 3 ── */
   function renderStep3() {
+    // Suggested (auto-detected) pages not yet added
+    const pending = suggestedPages.filter(function(p) { return !S.pages.includes(p); });
+    const suggestRows = pending.map(function(p) {
+      return '<div class="page-row" style="border-style:dashed;opacity:.8">'
+        + '<div class="page-left">&#128161; ' + esc(p) + '</div>'
+        + '<div class="page-actions">'
+        + '<button class="btn btn-secondary btn-sm" data-action="addSuggestedPage" data-page="' + esc(p) + '">+ Tambah</button>'
+        + '</div></div>';
+    }).join('');
+
     const rows = S.pages.map(function (p) {
       return '<div class="page-row">'
         + '<div class="page-left">&#128196; ' + esc(p) + '</div>'
@@ -721,21 +874,26 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
         + '<button class="icon-btn" title="Hapus" data-action="removePage" data-page="' + esc(p) + '">&#10005;</button>'
         + '</div></div>';
     }).join('');
+
+    const noPages = !S.pages.length && !pending.length;
     return '<div class="sec">Halaman desain</div>'
-      + '<div class="info">Tambah halaman, lalu klik &#9889; untuk kirim ke Copilot &#8212; Copilot akan membuat file HTML-nya di <code>docs/design/</code>.</div>'
-      + (rows || '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:6px">Belum ada halaman.</div>')
-      + '<div class="add-row">'
-      + '<input id="s3-page" placeholder="Nama halaman (contoh: Dashboard)" data-enter="addPage"/>'
+      + '<div class="info">Halaman terdeteksi otomatis dari <code>docs/flow.md</code>. Tambah jika ada yang kurang, lalu klik &#9889; untuk generate HTML-nya.</div>'
+      + '<button class="btn btn-secondary" data-action="detectPages" style="margin-bottom:8px">&#128269; Deteksi ulang dari dokumen</button>'
+      + (pending.length ? '<div class="sec" style="margin-bottom:4px">Terdeteksi dari dokumen</div>' + suggestRows : '')
+      + (S.pages.length ? '<div class="sec" style="margin-top:8px;margin-bottom:4px">Halaman ditambahkan</div>' + rows : '')
+      + (noPages ? '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:8px">Belum ada halaman. Klik "Deteksi ulang" atau tambah manual.</div>' : '')
+      + '<div class="add-row" style="margin-top:6px">'
+      + '<input id="s3-page" placeholder="Tambah halaman manual..." data-enter="addPage"/>'
       + '<button class="btn btn-primary btn-sm" data-action="addPage">+ Tambah</button>'
       + '</div>'
       + '<hr class="divider"/>'
-      + '<button class="btn btn-primary" data-action="generateAllPages"' + (S.pages.length === 0 ? ' disabled' : '') + '>&#9889; Generate semua halaman (preview prompt)</button>'
+      + '<button class="btn btn-primary" data-action="generateAllPages"' + (S.pages.length === 0 ? ' disabled' : '') + '>&#9889; Generate semua halaman</button>'
       + '<button class="btn btn-primary" data-action="goStep" data-step="4" style="margin-top:6px">Lanjut ke Step 4 &#8594;</button>'
       + '<button class="btn btn-secondary" data-action="goStep" data-step="2">&#8592; Kembali</button>';
   }
   function addPage() {
     const el = document.getElementById('s3-page');
-    if (el) { post({ type: 'addPage', pageName: el.value }); }
+    if (el && el.value.trim()) { post({ type: 'addPage', pageName: el.value }); el.value = ''; }
   }
 
   /* ── Step 4 ── */
