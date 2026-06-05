@@ -1,0 +1,46 @@
+{
+  "name": "archiguide",
+  "displayName": "ArchiGuide",
+  "description": "System design assistant — from idea to project scaffold",
+  "version": "0.0.1",
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "archiguide",
+          "title": "ArchiGuide",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "archiguide": [
+        {
+          "type": "webview",
+          "id": "archiguide.sidebar",
+          "name": "ArchiGuide"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "archiguide.newProject",
+        "title": "ArchiGuide: New Project"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "20.x",
+    "typescript": "^5.3.0"
+  }
+}
