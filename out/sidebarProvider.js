@@ -200,29 +200,28 @@ class SidebarProvider {
                     this.postToWebview({ type: 'suggestedPages', pages: detected });
                     break;
                 }
-                // ── Step 4: stack analysis (mode: chat — no file creation) ───────
-                case 'selectStack':
-                    this.state.update({ selectedStack: msg.stackId });
-                    this.postState();
-                    break;
-                case 'analyzeStack': {
-                    const prompt4 = promptBuilder_1.PromptBuilder.step4Prompt(this.state.getState());
-                    this.postToWebview({ type: 'showPrompt', prompt: prompt4, nextStep: null, mode: 'chat' });
-                    break;
-                }
+                // ── Step 4: tech stack (free text input) ─────────────────────────
                 case 'confirmStack': {
-                    if (!this.state.getState().selectedStack) {
-                        this.postToast('Pilih tech stack terlebih dahulu.', 'warn');
+                    const stackValue = msg.stackValue?.trim();
+                    if (!stackValue) {
+                        this.postToast('Masukkan tech stack terlebih dahulu.', 'warn');
                         break;
                     }
+                    this.state.update({ selectedStack: stackValue });
                     this.state.setStep(5);
                     this.postState();
                     break;
                 }
-                // ── Step 5: generate guides (mode: generate) ─────────────────────
+                // ── Step 5: generate guides ───────────────────────────────────────
                 case 'generateAll': {
                     const prompt5 = promptBuilder_1.PromptBuilder.step5Prompt(this.state.getState());
-                    this.postToWebview({ type: 'showPrompt', prompt: prompt5, nextStep: null, mode: 'generate' });
+                    this.postToWebview({ type: 'showPrompt', prompt: prompt5, nextStep: 6, mode: 'generate' });
+                    break;
+                }
+                // ── Step 6: scaffold actual project ───────────────────────────────
+                case 'scaffoldProject': {
+                    const prompt6 = promptBuilder_1.PromptBuilder.step6Prompt(this.state.getState());
+                    this.postToWebview({ type: 'showPrompt', prompt: prompt6, nextStep: null, mode: 'generate' });
                     break;
                 }
                 // ── Shared: user confirmed reviewed prompt → execute by mode ──────
@@ -605,10 +604,20 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
       case 'generatePage':       post({ type: 'generatePage', pageName: data.page }); break;
       case 'previewPage':        post({ type: 'previewPage', pageName: data.page }); break;
       case 'generateAllPages':   post({ type: 'generateAllPages' }); break;
-      case 'analyzeStack':       post({ type: 'analyzeStack' }); break;
-      case 'selectStack':        post({ type: 'selectStack', stackId: data.stack }); break;
-      case 'confirmStack':       post({ type: 'confirmStack' }); break;
+      case 'selectStackPreset': {
+        const el = document.getElementById('s4-stack');
+        if (el) { el.value = data.stack; el.focus(); }
+        break;
+      }
+      case 'confirmStack': {
+        const el = document.getElementById('s4-stack');
+        const val = el ? el.value.trim() : (S.selectedStack || '');
+        if (!val) { showToast('Masukkan tech stack terlebih dahulu.', 'warn'); break; }
+        post({ type: 'confirmStack', stackValue: val });
+        break;
+      }
       case 'generateAll':        post({ type: 'generateAll' }); break;
+      case 'scaffoldProject':    post({ type: 'scaffoldProject' }); break;
       case 'goStep':
         promptPreview = null; promptSent = false;
         post({ type: 'setStep', step: parseInt(data.step, 10) });
@@ -695,7 +704,7 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
   }
 
   function renderSteps() {
-    const labels = ['Input', 'Dokumen & Tema', 'Desain', 'Tech Stack', 'Generate'];
+    const labels = ['Input', 'Dokumen & Style', 'Desain', 'Tech Stack', 'Panduan', 'Scaffold'];
     document.getElementById('steps-nav').innerHTML = labels.map(function (l, i) {
       const n = i + 1;
       const done = n < S.currentStep, active = n === S.currentStep;
@@ -715,6 +724,7 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
       case 3: p.innerHTML = renderStep3(); break;
       case 4: p.innerHTML = renderStep4(); break;
       case 5: p.innerHTML = renderStep5(); break;
+      case 6: p.innerHTML = renderStep6(); break;
     }
   }
 
@@ -898,48 +908,69 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
 
   /* ── Step 4 ── */
   function renderStep4() {
-    const items = stacks.map(function (st) {
-      return '<div class="stack-item' + (S.selectedStack === st.id ? ' sel' : '') + '" data-action="selectStack" data-stack="' + st.id + '">'
-        + '<div class="stack-name">' + st.label + '</div>'
-        + '<div class="stack-type">' + st.type + '</div></div>';
+    const chips = stacks.map(function(st) {
+      return '<button class="btn btn-secondary btn-sm" style="margin:3px 3px 0 0;width:auto" '
+        + 'data-action="selectStackPreset" data-stack="' + esc(st.label) + '">'
+        + esc(st.label) + '</button>';
     }).join('');
     return '<div class="sec">Tech stack</div>'
-      + '<div class="info">Klik "Minta saran Copilot" agar Copilot membaca <code>docs/flow.md</code> dan merekomendasikan stack terbaik.</div>'
-      + '<button class="btn btn-secondary" data-action="analyzeStack" style="margin-bottom:10px">&#129302; Minta saran Copilot</button>'
-      + '<div class="sec">Atau pilih manual</div>'
-      + items
+      + '<div class="info">Masukkan tech stack yang akan digunakan. Bisa kombinasi apa saja sesuai kebutuhan proyek.</div>'
+      + '<label>Stack yang digunakan</label>'
+      + '<input id="s4-stack" placeholder="Contoh: Laravel + Vue.js + MySQL, Next.js + Prisma + PostgreSQL..." '
+      + 'value="' + esc(S.selectedStack) + '" data-enter="confirmStack"/>'
+      + '<div class="sec" style="margin-top:10px">Preset cepat</div>'
+      + '<div style="display:flex;flex-wrap:wrap;margin-bottom:10px">' + chips + '</div>'
       + '<hr class="divider"/>'
-      + '<button class="btn btn-primary" data-action="confirmStack"' + (S.selectedStack ? '' : ' disabled') + '>Lanjut &#8212; generate project &#8594;</button>'
+      + '<button class="btn btn-primary" data-action="confirmStack">Lanjut &#8212; generate project &#8594;</button>'
       + '<button class="btn btn-secondary" data-action="goStep" data-step="3">&#8592; Kembali</button>';
   }
 
   /* ── Step 5 ── */
   function renderStep5() {
-    const files = [
-      ['docs/FSD.md', true],
-      ['docs/flow.md', true],
-      ['.archiguide/design-tokens.json', true],
-      ['docs/design/*.html', S.pages.length > 0],
-      ['docs/copilot-guides/backend-guide.md', false],
-      ['docs/copilot-guides/frontend-guide.md', false],
-      ['.github/copilot-instructions.md', false],
+    const guides = [
+      'docs/copilot-guides/backend-guide.md',
+      'docs/copilot-guides/frontend-guide.md',
+      '.github/copilot-instructions.md',
     ];
-    const rows = files.map(function (f) {
+    const guideRows = guides.map(function(f) {
       return '<div class="file-row"><div style="display:flex;align-items:center">'
-        + '<div class="dot ' + (f[1] ? 'dot-done' : 'dot-pend') + '"></div>'
-        + '<code>' + f[0] + '</code></div></div>';
+        + '<div class="dot dot-pend"></div><code>' + f + '</code></div>'
+        + '<button class="btn btn-secondary btn-sm" data-action="openFile" data-path="' + esc(f) + '">Buka</button></div>';
     }).join('');
-    return '<div class="sec">Generate project</div>'
-      + '<div class="info">Copilot akan membuat copilot-guides dan menampilkan perintah scaffold yang perlu dijalankan di terminal.</div>'
-      + rows
-      + '<button class="btn btn-primary" data-action="generateAll" style="margin-top:10px">&#9889; Kirim ke Copilot &#8212; generate guides</button>'
+    return '<div class="sec">Generate panduan developer</div>'
+      + '<div class="info">Copilot Agent akan membuat tiga file panduan siap pakai untuk developer yang mengerjakan proyek ini.</div>'
+      + guideRows
+      + '<button class="btn btn-primary" data-action="generateAll" style="margin-top:10px">&#9889; Generate panduan (backend, frontend, Copilot instructions)</button>'
       + '<hr class="divider"/>'
-      + '<div class="sec">Buka panduan</div>'
+      + '<button class="btn btn-primary" data-action="goStep" data-step="6">Lanjut ke Scaffold Project &#8594;</button>'
+      + '<button class="btn btn-secondary" data-action="goStep" data-step="3">&#8592; Kembali ke halaman</button>';
+  }
+
+  /* ── Step 6 ── */
+  function renderStep6() {
+    const stack = S.selectedStack || '(belum dipilih)';
+    const safeName = (S.projectName || '').toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+    const pageRows = S.pages.map(function(p) {
+      const f = p.toLowerCase().replace(/\s+/g, '-');
+      return '<div class="file-row"><div style="display:flex;align-items:center">'
+        + '<div class="dot dot-done"></div><code>docs/design/' + esc(f) + '.html</code></div>'
+        + '<button class="btn btn-secondary btn-sm" data-action="previewPage" data-page="' + esc(p) + '">Preview</button></div>';
+    }).join('');
+    return '<div class="sec">Scaffold Project</div>'
+      + '<div class="info">Copilot Agent akan menjalankan perintah scaffold, membuat struktur folder dan file awal di <code>project/</code>, serta menyesuaikan konfigurasi berdasarkan panduan yang sudah dibuat.</div>'
+      + '<div class="file-row"><div style="display:flex;align-items:center"><div class="dot dot-done"></div>'
+      + '<span style="font-size:12px">Stack: <strong>' + esc(stack) + '</strong></span></div></div>'
+      + '<div class="file-row"><div style="display:flex;align-items:center"><div class="dot dot-done"></div>'
+      + '<span style="font-size:12px">Target folder: <code>project/' + esc(safeName) + '/</code></span></div></div>'
+      + (pageRows ? '<div class="sec" style="margin-top:8px">HTML prototype siap</div>' + pageRows : '')
+      + '<hr class="divider"/>'
+      + '<button class="btn btn-primary" data-action="scaffoldProject" style="margin-top:4px">&#9889; Generate scaffold project &#8594;</button>'
+      + '<hr class="divider"/>'
+      + '<div class="sec">Setelah scaffold</div>'
+      + '<div class="info warn">Buka folder <code>project/</code> sebagai workspace baru, lalu gunakan panduan developer untuk mulai coding bersama Copilot.</div>'
       + '<button class="btn btn-secondary" data-action="openFile" data-path="docs/copilot-guides/backend-guide.md">&#128196; Backend guide</button>'
       + '<button class="btn btn-secondary" data-action="openFile" data-path="docs/copilot-guides/frontend-guide.md">&#128196; Frontend guide</button>'
-      + '<button class="btn btn-secondary" data-action="openFile" data-path=".github/copilot-instructions.md">&#128196; Copilot instructions</button>'
-      + '<hr class="divider"/>'
-      + '<button class="btn btn-secondary" data-action="goStep" data-step="3">&#8592; Tambah halaman baru</button>';
+      + '<button class="btn btn-secondary" data-action="goStep" data-step="5">&#8592; Kembali ke panduan</button>';
   }
 
   /* ── Utils ── */

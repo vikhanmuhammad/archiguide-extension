@@ -157,6 +157,31 @@ class PromptBuilder {
             + `- List halaman sistem\n`
             + `- Link ke panduan: \`docs/copilot-guides/backend-guide.md\` dan \`docs/copilot-guides/frontend-guide.md\``;
     }
+    // ── Step 6 → scaffold actual project code ─────────────────────────────────
+    static step6Prompt(state) {
+        const safeName = state.projectName.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+        const pageList = state.pages
+            .map(p => `- ${p} → docs/design/${p.toLowerCase().replace(/\s+/g, '-')}.html`)
+            .join('\n');
+        return `Scaffold proyek **${state.projectName}** menggunakan stack **${state.selectedStack}** `
+            + `di dalam folder \`project/\` yang sudah ada di workspace ini.\n\n`
+            + `**Nama folder project:** \`${safeName}\`\n`
+            + `**Deskripsi sistem:** ${state.systemDescription}\n\n`
+            + `**Langkah yang perlu dilakukan:**\n\n`
+            + `1. Jalankan perintah scaffold ${state.selectedStack} di dalam folder \`project/\`\n`
+            + `2. Buat struktur folder dan file awal sesuai konvensi ${state.selectedStack}\n`
+            + `3. Set nama project sebagai \`${safeName}\` di file konfigurasi (package.json, composer.json, pyproject.toml, dll.)\n`
+            + `4. Buat file \`.env.example\` dengan variabel environment yang dibutuhkan (database, app key, dll.)\n`
+            + `5. Baca panduan backend untuk setup awal yang spesifik:\n`
+            + `   #file:docs/copilot-guides/backend-guide.md\n\n`
+            + `**Halaman yang perlu diimplementasi (ada prototype HTML-nya):**\n${pageList}\n\n`
+            + `**Referensi tambahan:**\n`
+            + `#file:docs/copilot-guides/frontend-guide.md\n`
+            + `#file:docs/copilot-guides/backend-guide.md\n`
+            + `#file:.github/copilot-instructions.md\n`
+            + `#file:docs/flow.md\n\n`
+            + `Setelah scaffold selesai, tampilkan ringkasan: perintah yang dijalankan, struktur folder yang dibuat, dan langkah selanjutnya untuk developer.`;
+    }
 }
 exports.PromptBuilder = PromptBuilder;
 //# sourceMappingURL=promptBuilder.js.map

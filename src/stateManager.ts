@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-export type Step = 0 | 1 | 2 | 3 | 4 | 5;
+export type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface DesignToken {
   theme: string;
