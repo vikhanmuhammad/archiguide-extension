@@ -44,6 +44,7 @@ const DEFAULT_STATE = {
     pages: [],
     selectedStack: '',
     designToken: { theme: 'custom', primary: '#6366f1', radius: '8px', font: 'Inter' },
+    language: 'id',
     workspacePath: '',
     initialized: false,
 };
@@ -55,8 +56,7 @@ exports.STACKS = [
     { id: 'django-react', label: 'Django + React', type: 'Separated BE/FE', cmd: 'django-admin startproject project' },
 ];
 class StateManager {
-    constructor(context) {
-        this.context = context;
+    constructor(_context) {
         this.state = { ...DEFAULT_STATE };
     }
     getState() { return this.state; }

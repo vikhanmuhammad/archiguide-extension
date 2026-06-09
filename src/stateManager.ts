@@ -18,6 +18,7 @@ export interface ProjectState {
   pages: string[];
   selectedStack: string;
   designToken: DesignToken;
+  language: 'id' | 'en';
   workspacePath: string;
   initialized: boolean;
 }
@@ -31,6 +32,7 @@ const DEFAULT_STATE: ProjectState = {
   pages: [],
   selectedStack: '',
   designToken: { theme: 'custom', primary: '#6366f1', radius: '8px', font: 'Inter' },
+  language: 'id',
   workspacePath: '',
   initialized: false,
 };
@@ -47,7 +49,7 @@ export class StateManager {
   private state: ProjectState;
   private configUri: vscode.Uri | undefined;
 
-  constructor(private context: vscode.ExtensionContext) {
+  constructor(_context: vscode.ExtensionContext) {
     this.state = { ...DEFAULT_STATE };
   }
 

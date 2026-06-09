@@ -24,6 +24,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           this.postState();
           break;
 
+        case 'setLanguage':
+          this.state.update({ language: msg.lang as 'id' | 'en' });
+          this.postState();
+          break;
+
         // ── Step 0: create + open workspace folder ───────────────────────
         case 'createWorkspace': {
           try {
@@ -534,20 +539,17 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
     </div>
     ArchiGuide
   </div>
-  <span class="project-label" id="proj-label"></span>
+  <div style="display:flex;align-items:center;gap:6px">
+    <button id="lang-btn" data-action="toggleLanguage"
+      style="background:transparent;border:1px solid var(--vscode-widget-border);border-radius:3px;
+             color:var(--vscode-foreground);font-size:10px;font-weight:600;padding:2px 6px;
+             cursor:pointer;letter-spacing:.04em">EN</button>
+    <span class="project-label" id="proj-label"></span>
+  </div>
 </div>
 
 <div class="steps" id="steps-nav" style="display:none"></div>
-<div class="panel" id="panel">
-  <div class="hero">
-    <div class="hero-icon">&#128193;</div>
-    <div class="hero-title">Buat project baru</div>
-    <div class="hero-sub">ArchiGuide akan membuat folder project dan menyiapkan semua file secara otomatis.</div>
-    <label style="text-align:left;display:block;margin-bottom:4px">Nama project</label>
-    <input id="ws-name" type="text" placeholder="contoh: SiKas" style="margin-bottom:10px" data-enter="createWorkspace"/>
-    <button class="btn btn-primary" data-action="createWorkspace" style="width:100%;margin-top:0">Pilih lokasi &amp; buat project &#8594;</button>
-  </div>
-</div>
+<div class="panel" id="panel"></div>
 <div id="toast"></div>
 
 <script>
@@ -607,12 +609,15 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
       case 'confirmStack': {
         const el = document.getElementById('s4-stack');
         const val = el ? el.value.trim() : (S.selectedStack || '');
-        if (!val) { showToast('Masukkan tech stack terlebih dahulu.', 'warn'); break; }
+        if (!val) { showToast(t('Masukkan tech stack terlebih dahulu.','Please enter a tech stack first.'), 'warn'); break; }
         post({ type: 'confirmStack', stackValue: val });
         break;
       }
       case 'generateAll':        post({ type: 'generateAll' }); break;
       case 'scaffoldProject':    post({ type: 'scaffoldProject' }); break;
+      case 'toggleLanguage':
+        post({ type: 'setLanguage', lang: (S && S.language === 'en') ? 'id' : 'en' });
+        break;
       case 'goStep':
         promptPreview = null; promptSent = false;
         post({ type: 'setStep', step: parseInt(data.step, 10) });
@@ -635,7 +640,7 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
       case 'parseAndWrite': {
         const ta = document.getElementById('paste-text');
         const txt = ta ? ta.value.trim() : '';
-        if (!txt) { showToast('Tempel respons Copilot terlebih dahulu.', 'warn'); break; }
+        if (!txt) { showToast(t('Tempel respons Copilot terlebih dahulu.','Paste the Copilot response first.'), 'warn'); break; }
         post({ type: 'parseAndWrite', text: txt, nextStep: promptPreview ? promptPreview.nextStep : null });
         break;
       }
@@ -688,6 +693,8 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
   // ── Render ────────────────────────────────────────────────────────────────
   function render() {
     document.getElementById('proj-label').textContent = S.projectName || '';
+    const lb = document.getElementById('lang-btn');
+    if (lb) { lb.textContent = S.language === 'en' ? 'EN' : 'ID'; lb.title = S.language === 'en' ? 'Switch to Indonesian' : 'Switch to English'; }
     const nav = document.getElementById('steps-nav');
     if (!wsReady || S.currentStep === 0) {
       nav.style.display = 'none';
@@ -699,7 +706,7 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
   }
 
   function renderSteps() {
-    const labels = ['Input', 'Dokumen & Style', 'Desain', 'Tech Stack', 'Panduan', 'Scaffold'];
+    const labels = ['Input', t('Dokumen & Style','Docs & Style'), t('Desain','Design'), 'Tech Stack', t('Panduan','Guides'), 'Scaffold'];
     document.getElementById('steps-nav').innerHTML = labels.map(function (l, i) {
       const n = i + 1;
       const done = n < S.currentStep, active = n === S.currentStep;
@@ -730,20 +737,20 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
     // ── State: waiting — agent mode or paste fallback ────────────────────────
     if (promptSent && mode === 'generate' && !promptPreview.filesWritten) {
       const nextBtn = promptPreview.nextStep
-        ? '<button class="btn btn-primary" data-action="goStep" data-step="' + promptPreview.nextStep + '" style="margin-top:4px">File sudah terbuat &#8212; Lanjut ke Step ' + promptPreview.nextStep + ' &#8594;</button>'
+        ? '<button class="btn btn-primary" data-action="goStep" data-step="' + promptPreview.nextStep + '" style="margin-top:4px">' + t('File sudah terbuat &#8212; Lanjut ke Step ','Files created &#8212; Continue to Step ') + promptPreview.nextStep + ' &#8594;</button>'
         : '';
-      return '<div class="sec">Copilot Agent sedang bekerja</div>'
-        + '<div class="info">Prompt dikirim ke <strong>Copilot Agent</strong>. '
-        + 'Agent akan membuat file langsung di workspace &#8212; Anda bisa melihat prosesnya di panel Copilot.</div>'
+      return '<div class="sec">' + t('Copilot Agent sedang bekerja','Copilot Agent is working') + '</div>'
+        + '<div class="info">' + t('Prompt dikirim ke','Prompt sent to') + ' <strong>Copilot Agent</strong>. '
+        + t('Agent akan membuat file langsung di workspace &#8212; Anda bisa melihat prosesnya di panel Copilot.','Agent will create files directly in the workspace &#8212; you can watch the progress in the Copilot panel.') + '</div>'
         + nextBtn
         + '<hr class="divider"/>'
-        + '<div class="sec" style="margin-top:4px">Fallback: tempel manual</div>'
-        + '<div class="info warn">Jika Agent tidak membuat file otomatis, copy seluruh respons Copilot dan tempel di sini.</div>'
-        + '<textarea id="paste-text" rows="8" placeholder="Tempel respons Copilot di sini..." '
+        + '<div class="sec" style="margin-top:4px">' + t('Fallback: tempel manual','Fallback: manual paste') + '</div>'
+        + '<div class="info warn">' + t('Jika Agent tidak membuat file otomatis, copy seluruh respons Copilot dan tempel di sini.','If Agent did not create files automatically, copy the full Copilot response and paste it here.') + '</div>'
+        + '<textarea id="paste-text" rows="8" placeholder="' + t('Tempel respons Copilot di sini...','Paste Copilot response here...') + '" '
         + 'style="font-size:11px;font-family:var(--vscode-editor-font-family,monospace);margin-bottom:6px"></textarea>'
-        + '<button class="btn btn-secondary" data-action="parseAndWrite">&#128196; Buat file dari tempel ini</button>'
-        + '<button class="btn btn-secondary" data-action="resendPrompt" style="margin-top:4px">&#8635; Kirim ulang</button>'
-        + '<button class="btn btn-secondary" data-action="cancelPreview">&#8592; Kembali ke form</button>';
+        + '<button class="btn btn-secondary" data-action="parseAndWrite">&#128196; ' + t('Buat file dari tempel ini','Create files from paste') + '</button>'
+        + '<button class="btn btn-secondary" data-action="resendPrompt" style="margin-top:4px">&#8635; ' + t('Kirim ulang','Resend') + '</button>'
+        + '<button class="btn btn-secondary" data-action="cancelPreview">&#8592; ' + t('Kembali ke form','Back to form') + '</button>';
     }
 
     // ── State: success (files written, or chat prompt sent) ─────────────────
@@ -752,57 +759,57 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
       const fileRows = files.map(function(f) {
         return '<div class="file-row"><div style="display:flex;align-items:center">'
           + '<div class="dot dot-done"></div><code>' + esc(f) + '</code></div>'
-          + '<button class="btn btn-secondary btn-sm" data-action="openFile" data-path="' + esc(f) + '">Buka</button></div>';
+          + '<button class="btn btn-secondary btn-sm" data-action="openFile" data-path="' + esc(f) + '">' + t('Buka','Open') + '</button></div>';
       }).join('');
 
       const successMsg = mode === 'chat'
-        ? 'Prompt dikirim ke Copilot Chat. Review hasil diskusi di panel Copilot.'
-        : files.length + ' file berhasil dibuat di workspace.';
+        ? t('Prompt dikirim ke Copilot Chat. Review hasil diskusi di panel Copilot.','Prompt sent to Copilot Chat. Review the discussion in the Copilot panel.')
+        : files.length + ' ' + t('file berhasil dibuat di workspace.','file(s) created in workspace.');
 
       const nextBtn = promptPreview.nextStep
-        ? '<button class="btn btn-primary" data-action="goStep" data-step="' + promptPreview.nextStep + '">Lanjut ke Step ' + promptPreview.nextStep + ' &#8594;</button>'
+        ? '<button class="btn btn-primary" data-action="goStep" data-step="' + promptPreview.nextStep + '">' + t('Lanjut ke Step ','Continue to Step ') + promptPreview.nextStep + ' &#8594;</button>'
         : '';
 
-      return '<div class="sec">Selesai</div>'
-        + '<div class="info">' + successMsg + (promptPreview.nextStep ? ' Klik <strong>Lanjut</strong> jika sudah puas dengan hasilnya.' : '') + '</div>'
+      return '<div class="sec">' + t('Selesai','Done') + '</div>'
+        + '<div class="info">' + successMsg + (promptPreview.nextStep ? ' ' + t('Klik <strong>Lanjut</strong> jika sudah puas dengan hasilnya.','Click <strong>Continue</strong> when satisfied with the result.') : '') + '</div>'
         + (fileRows ? '<div style="margin-bottom:8px">' + fileRows + '</div>' : '')
         + nextBtn
-        + '<button class="btn btn-secondary" data-action="resendPrompt" style="margin-top:6px">&#8635; Ulangi</button>'
-        + '<button class="btn btn-secondary" data-action="cancelPreview">&#8592; Kembali ke form</button>';
+        + '<button class="btn btn-secondary" data-action="resendPrompt" style="margin-top:6px">&#8635; ' + t('Ulangi','Retry') + '</button>'
+        + '<button class="btn btn-secondary" data-action="cancelPreview">&#8592; ' + t('Kembali ke form','Back to form') + '</button>';
     }
 
     // ── State: review prompt before sending ──────────────────────────────────
     const modeInfo = {
-      'generate': '&#128172; Prompt ini akan dikirim ke Copilot Chat. Setelah Copilot menjawab, Anda akan diminta menempel hasilnya agar file bisa dibuat.',
-      'direct':   '&#128196; File akan ditulis langsung ke workspace tanpa AI.',
-      'chat':     '&#128172; Prompt ini akan dikirim ke Copilot Chat untuk diskusi (tidak membuat file).',
+      'generate': '&#128172; ' + t('Prompt ini akan dikirim ke Copilot Chat. Setelah Copilot menjawab, Anda akan diminta menempel hasilnya agar file bisa dibuat.','This prompt will be sent to Copilot Chat. After Copilot responds, you can paste the result to create files.'),
+      'direct':   '&#128196; ' + t('File akan ditulis langsung ke workspace tanpa AI.','File will be written directly to the workspace without AI.'),
+      'chat':     '&#128172; ' + t('Prompt ini akan dikirim ke Copilot Chat untuk diskusi (tidak membuat file).','This prompt will be sent to Copilot Chat for discussion (no files created).'),
     }[mode] || '';
-    const sendLabel = mode === 'direct' ? 'Tulis file langsung &#8594;' : 'Kirim ke Copilot Chat &#8594;';
-    const promptLabel = mode === 'direct' ? 'Konten file yang akan ditulis' : 'Review prompt sebelum dikirim';
+    const sendLabel = mode === 'direct' ? t('Tulis file langsung &#8594;','Write file directly &#8594;') : t('Kirim ke Copilot Chat &#8594;','Send to Copilot Chat &#8594;');
+    const promptLabel = mode === 'direct' ? t('Konten file yang akan ditulis','File content to write') : t('Review prompt sebelum dikirim','Review prompt before sending');
 
     return '<div class="sec">' + promptLabel + '</div>'
-      + '<div class="info warn">' + modeInfo + ' Edit jika perlu.</div>'
+      + '<div class="info warn">' + modeInfo + ' ' + t('Edit jika perlu.','Edit if needed.') + '</div>'
       + '<textarea id="prompt-text" rows="13" style="font-size:11px;font-family:var(--vscode-editor-font-family,monospace);margin-bottom:6px">' + esc(promptPreview.prompt) + '</textarea>'
       + '<button class="btn btn-primary" data-action="sendPrompt">' + sendLabel + '</button>'
-      + '<button class="btn btn-secondary" data-action="cancelPreview">&#8592; Kembali</button>';
+      + '<button class="btn btn-secondary" data-action="cancelPreview">&#8592; ' + t('Kembali','Back') + '</button>';
   }
 
   /* ── Step 0: folder picker ── */
   function renderFolderPicker() {
     return '<div class="hero">'
       + '<div class="hero-icon">&#128193;</div>'
-      + '<div class="hero-title">Buat project baru</div>'
-      + '<div class="hero-sub">ArchiGuide akan membuat folder project dan menyiapkan semua file secara otomatis.</div>'
-      + '<label style="text-align:left;display:block;margin-bottom:4px">Nama project</label>'
-      + '<input id="ws-name" type="text" placeholder="contoh: SiKas" style="margin-bottom:10px" data-enter="createWorkspace"/>'
-      + '<button class="btn btn-primary" data-action="createWorkspace" style="width:100%;margin-top:0">Pilih lokasi &amp; buat project &#8594;</button>'
+      + '<div class="hero-title">' + t('Buat project baru','Create new project') + '</div>'
+      + '<div class="hero-sub">' + t('ArchiGuide akan membuat folder project dan menyiapkan semua file secara otomatis.','ArchiGuide will create a project folder and set up all files automatically.') + '</div>'
+      + '<label style="text-align:left;display:block;margin-bottom:4px">' + t('Nama project','Project name') + '</label>'
+      + '<input id="ws-name" type="text" placeholder="' + t('contoh: SiKas','e.g.: SiKas') + '" style="margin-bottom:10px" data-enter="createWorkspace"/>'
+      + '<button class="btn btn-primary" data-action="createWorkspace" style="width:100%;margin-top:0">' + t('Pilih lokasi &amp; buat project &#8594;','Choose location &amp; create project &#8594;') + '</button>'
       + '</div>';
   }
   function createWorkspace() {
     const el = document.getElementById('ws-name');
     const name = el ? el.value.trim() : '';
-    if (!name) { showToast('Isi nama project terlebih dahulu.', 'warn'); return; }
-    showToast('Membuka dialog pilih folder...', 'info');
+    if (!name) { showToast(t('Isi nama project terlebih dahulu.','Please enter a project name.'), 'warn'); return; }
+    showToast(t('Membuka dialog pilih folder...','Opening folder picker dialog...'), 'info');
     post({ type: 'createWorkspace', projectName: name });
   }
 
@@ -814,22 +821,22 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
       return '<div class="page-row">'
         + '<div class="page-left">&#128206; ' + esc(fname) + '</div>'
         + '<div class="page-actions">'
-        + '<button class="icon-btn" title="Buka" data-action="openFile" data-path="' + esc(f) + '">&#128065;</button>'
-        + '<button class="icon-btn" title="Hapus" data-action="removeReferenceFile" data-path="' + esc(f) + '">&#10005;</button>'
+        + '<button class="icon-btn" title="' + t('Buka','Open') + '" data-action="openFile" data-path="' + esc(f) + '">&#128065;</button>'
+        + '<button class="icon-btn" title="' + t('Hapus','Remove') + '" data-action="removeReferenceFile" data-path="' + esc(f) + '">&#10005;</button>'
         + '</div></div>';
     }).join('');
-    return '<div class="sec">Deskripsi sistem</div>'
-      + '<div class="info">Ceritakan sistem yang ingin dibuat. Copilot Agent akan membuat <code>docs/FSD.md</code> dan <code>docs/flow.md</code>.</div>'
-      + '<label>Nama proyek</label>'
-      + '<input id="s1-name" placeholder="contoh: SiKas &#8212; Sistem Kasir Toko" value="' + esc(S.projectName) + '"/>'
-      + '<label>Deskripsi sistem</label>'
-      + '<textarea id="s1-desc" rows="6" placeholder="Jelaskan sistem: siapa penggunanya, apa yang bisa dilakukan, fitur utama...">' + esc(S.systemDescription) + '</textarea>'
+    return '<div class="sec">' + t('Deskripsi sistem','System description') + '</div>'
+      + '<div class="info">' + t('Ceritakan sistem yang ingin dibuat. Copilot Agent akan membuat','Describe the system to build. Copilot Agent will create') + ' <code>docs/FSD.md</code> ' + t('dan','and') + ' <code>docs/flow.md</code>.</div>'
+      + '<label>' + t('Nama proyek','Project name') + '</label>'
+      + '<input id="s1-name" placeholder="' + t('contoh: SiKas &#8212; Sistem Kasir Toko','e.g.: SiKas &#8212; Point of Sale System') + '" value="' + esc(S.projectName) + '"/>'
+      + '<label>' + t('Deskripsi sistem','System description') + '</label>'
+      + '<textarea id="s1-desc" rows="6" placeholder="' + t('Jelaskan sistem: siapa penggunanya, apa yang bisa dilakukan, fitur utama...','Describe the system: who uses it, what it does, key features...') + '">' + esc(S.systemDescription) + '</textarea>'
       + '<hr class="divider"/>'
-      + '<div class="sec">Dokumen referensi <span style="font-weight:400;text-transform:none">(opsional)</span></div>'
-      + '<div class="info">Lampirkan spesifikasi, wireframe, atau catatan sebagai sumber tambahan untuk Copilot.</div>'
+      + '<div class="sec">' + t('Dokumen referensi','Reference documents') + ' <span style="font-weight:400;text-transform:none">(' + t('opsional','optional') + ')</span></div>'
+      + '<div class="info">' + t('Lampirkan spesifikasi, wireframe, atau catatan sebagai sumber tambahan untuk Copilot.','Attach specifications, wireframes, or notes as additional context for Copilot.') + '</div>'
       + (refRows || '')
-      + '<button class="btn btn-secondary" data-action="addReferenceFile" style="margin-bottom:8px">+ Lampirkan dokumen referensi</button>'
-      + '<button class="btn btn-primary" data-action="submitStep1">Kirim ke Copilot Agent &#8212; buat FSD &amp; flow &#8594;</button>';
+      + '<button class="btn btn-secondary" data-action="addReferenceFile" style="margin-bottom:8px">+ ' + t('Lampirkan dokumen referensi','Attach reference document') + '</button>'
+      + '<button class="btn btn-primary" data-action="submitStep1">' + t('Kirim ke Copilot Agent &#8212; buat FSD &amp; flow &#8594;','Send to Copilot Agent &#8212; create FSD &amp; flow &#8594;') + '</button>';
   }
   function submitStep1() {
     post({ type: 'submitStep1',
@@ -843,19 +850,19 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
 
   /* ── Step 2 ── */
   function renderStep2() {
-    return '<div class="sec">Dokumen</div>'
-      + '<div class="info">Review dokumen yang sudah dibuat, lalu deskripsikan tampilan visual yang Anda inginkan.</div>'
+    return '<div class="sec">' + t('Dokumen','Documents') + '</div>'
+      + '<div class="info">' + t('Review dokumen yang sudah dibuat, lalu deskripsikan tampilan visual yang Anda inginkan.','Review the documents created, then describe the visual style you want.') + '</div>'
       + '<div class="file-row"><div style="display:flex;align-items:center"><div class="dot dot-done"></div><code>docs/FSD.md</code></div>'
-      + '<button class="btn btn-secondary btn-sm" data-action="openFile" data-path="docs/FSD.md">Buka</button></div>'
+      + '<button class="btn btn-secondary btn-sm" data-action="openFile" data-path="docs/FSD.md">' + t('Buka','Open') + '</button></div>'
       + '<div class="file-row"><div style="display:flex;align-items:center"><div class="dot dot-done"></div><code>docs/flow.md</code></div>'
-      + '<button class="btn btn-secondary btn-sm" data-action="openFile" data-path="docs/flow.md">Buka</button></div>'
+      + '<button class="btn btn-secondary btn-sm" data-action="openFile" data-path="docs/flow.md">' + t('Buka','Open') + '</button></div>'
       + '<hr class="divider"/>'
-      + '<div class="sec">Style visual</div>'
-      + '<div class="info">Deskripsikan warna, font, dan gaya yang diinginkan. Copilot Agent akan membuat <code>.archiguide/design-tokens.json</code>.</div>'
-      + '<textarea id="s2-style" rows="4" placeholder="Contoh: Warna utama biru tua #1e3a5f, tampilan profesional minimalis, sudut sedikit bulat, font Poppins atau Inter">'
+      + '<div class="sec">' + t('Style visual','Visual style') + '</div>'
+      + '<div class="info">' + t('Deskripsikan warna, font, dan gaya yang diinginkan. Copilot Agent akan membuat','Describe colors, fonts, and style. Copilot Agent will create') + ' <code>.archiguide/design-tokens.json</code>.</div>'
+      + '<textarea id="s2-style" rows="4" placeholder="' + t('Contoh: Warna utama biru tua #1e3a5f, tampilan profesional minimalis, sudut sedikit bulat, font Poppins atau Inter','Example: Dark blue primary #1e3a5f, professional minimal look, slightly rounded corners, Poppins or Inter font') + '">'
       + esc(S.styleDescription || '') + '</textarea>'
       + '<button class="btn btn-primary" data-action="submitStep2" style="margin-top:7px">Generate design tokens &#8594;</button>'
-      + '<button class="btn btn-secondary" data-action="goStep" data-step="1">&#8592; Kembali</button>';
+      + '<button class="btn btn-secondary" data-action="goStep" data-step="1">&#8592; ' + t('Kembali','Back') + '</button>';
   }
 
   /* ── Step 3 ── */
@@ -866,7 +873,7 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
       return '<div class="page-row" style="border-style:dashed;opacity:.8">'
         + '<div class="page-left">&#128161; ' + esc(p) + '</div>'
         + '<div class="page-actions">'
-        + '<button class="btn btn-secondary btn-sm" data-action="addSuggestedPage" data-page="' + esc(p) + '">+ Tambah</button>'
+        + '<button class="btn btn-secondary btn-sm" data-action="addSuggestedPage" data-page="' + esc(p) + '">+ ' + t('Tambah','Add') + '</button>'
         + '</div></div>';
     }).join('');
 
@@ -876,25 +883,25 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
         + '<div class="page-actions">'
         + '<button class="icon-btn" title="Generate via Copilot" data-action="generatePage" data-page="' + esc(p) + '">&#9889;</button>'
         + '<button class="icon-btn" title="Preview" data-action="previewPage" data-page="' + esc(p) + '">&#128065;</button>'
-        + '<button class="icon-btn" title="Hapus" data-action="removePage" data-page="' + esc(p) + '">&#10005;</button>'
+        + '<button class="icon-btn" title="' + t('Hapus','Remove') + '" data-action="removePage" data-page="' + esc(p) + '">&#10005;</button>'
         + '</div></div>';
     }).join('');
 
     const noPages = !S.pages.length && !pending.length;
-    return '<div class="sec">Halaman desain</div>'
-      + '<div class="info">Halaman terdeteksi otomatis dari <code>docs/flow.md</code>. Tambah jika ada yang kurang, lalu klik &#9889; untuk generate HTML-nya.</div>'
-      + '<button class="btn btn-secondary" data-action="detectPages" style="margin-bottom:8px">&#128269; Deteksi ulang dari dokumen</button>'
-      + (pending.length ? '<div class="sec" style="margin-bottom:4px">Terdeteksi dari dokumen</div>' + suggestRows : '')
-      + (S.pages.length ? '<div class="sec" style="margin-top:8px;margin-bottom:4px">Halaman ditambahkan</div>' + rows : '')
-      + (noPages ? '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:8px">Belum ada halaman. Klik "Deteksi ulang" atau tambah manual.</div>' : '')
+    return '<div class="sec">' + t('Halaman desain','Design pages') + '</div>'
+      + '<div class="info">' + t('Halaman terdeteksi otomatis dari','Pages detected automatically from') + ' <code>docs/flow.md</code>. ' + t('Tambah jika ada yang kurang, lalu klik &#9889; untuk generate HTML-nya.','Add any missing ones, then click &#9889; to generate HTML.') + '</div>'
+      + '<button class="btn btn-secondary" data-action="detectPages" style="margin-bottom:8px">&#128269; ' + t('Deteksi ulang dari dokumen','Re-detect from documents') + '</button>'
+      + (pending.length ? '<div class="sec" style="margin-bottom:4px">' + t('Terdeteksi dari dokumen','Detected from document') + '</div>' + suggestRows : '')
+      + (S.pages.length ? '<div class="sec" style="margin-top:8px;margin-bottom:4px">' + t('Halaman ditambahkan','Added pages') + '</div>' + rows : '')
+      + (noPages ? '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:8px">' + t('Belum ada halaman. Klik &ldquo;Deteksi ulang&rdquo; atau tambah manual.','No pages yet. Click &ldquo;Re-detect&rdquo; or add manually.') + '</div>' : '')
       + '<div class="add-row" style="margin-top:6px">'
-      + '<input id="s3-page" placeholder="Tambah halaman manual..." data-enter="addPage"/>'
-      + '<button class="btn btn-primary btn-sm" data-action="addPage">+ Tambah</button>'
+      + '<input id="s3-page" placeholder="' + t('Tambah halaman manual...','Add page manually...') + '" data-enter="addPage"/>'
+      + '<button class="btn btn-primary btn-sm" data-action="addPage">+ ' + t('Tambah','Add') + '</button>'
       + '</div>'
       + '<hr class="divider"/>'
-      + '<button class="btn btn-primary" data-action="generateAllPages"' + (S.pages.length === 0 ? ' disabled' : '') + '>&#9889; Generate semua halaman</button>'
-      + '<button class="btn btn-primary" data-action="goStep" data-step="4" style="margin-top:6px">Lanjut ke Step 4 &#8594;</button>'
-      + '<button class="btn btn-secondary" data-action="goStep" data-step="2">&#8592; Kembali</button>';
+      + '<button class="btn btn-primary" data-action="generateAllPages"' + (S.pages.length === 0 ? ' disabled' : '') + '>&#9889; ' + t('Generate semua halaman','Generate all pages') + '</button>'
+      + '<button class="btn btn-primary" data-action="goStep" data-step="4" style="margin-top:6px">' + t('Lanjut ke Step 4 &#8594;','Continue to Step 4 &#8594;') + '</button>'
+      + '<button class="btn btn-secondary" data-action="goStep" data-step="2">&#8592; ' + t('Kembali','Back') + '</button>';
   }
   function addPage() {
     const el = document.getElementById('s3-page');
@@ -909,15 +916,15 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
         + esc(st.label) + '</button>';
     }).join('');
     return '<div class="sec">Tech stack</div>'
-      + '<div class="info">Masukkan tech stack yang akan digunakan. Bisa kombinasi apa saja sesuai kebutuhan proyek.</div>'
-      + '<label>Stack yang digunakan</label>'
-      + '<input id="s4-stack" placeholder="Contoh: Laravel + Vue.js + MySQL, Next.js + Prisma + PostgreSQL..." '
+      + '<div class="info">' + t('Masukkan tech stack yang akan digunakan. Bisa kombinasi apa saja sesuai kebutuhan proyek.','Enter the tech stack to use. Any combination works for your project.') + '</div>'
+      + '<label>' + t('Stack yang digunakan','Stack to use') + '</label>'
+      + '<input id="s4-stack" placeholder="' + t('Contoh: Laravel + Vue.js + MySQL, Next.js + Prisma + PostgreSQL...','Example: Laravel + Vue.js + MySQL, Next.js + Prisma + PostgreSQL...') + '" '
       + 'value="' + esc(S.selectedStack) + '" data-enter="confirmStack"/>'
-      + '<div class="sec" style="margin-top:10px">Preset cepat</div>'
+      + '<div class="sec" style="margin-top:10px">' + t('Preset cepat','Quick presets') + '</div>'
       + '<div style="display:flex;flex-wrap:wrap;margin-bottom:10px">' + chips + '</div>'
       + '<hr class="divider"/>'
-      + '<button class="btn btn-primary" data-action="confirmStack">Lanjut &#8212; generate project &#8594;</button>'
-      + '<button class="btn btn-secondary" data-action="goStep" data-step="3">&#8592; Kembali</button>';
+      + '<button class="btn btn-primary" data-action="confirmStack">' + t('Lanjut &#8212; generate project &#8594;','Continue &#8212; generate project &#8594;') + '</button>'
+      + '<button class="btn btn-secondary" data-action="goStep" data-step="3">&#8592; ' + t('Kembali','Back') + '</button>';
   }
 
   /* ── Step 5 ── */
@@ -930,20 +937,20 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
     const guideRows = guides.map(function(f) {
       return '<div class="file-row"><div style="display:flex;align-items:center">'
         + '<div class="dot dot-pend"></div><code>' + f + '</code></div>'
-        + '<button class="btn btn-secondary btn-sm" data-action="openFile" data-path="' + esc(f) + '">Buka</button></div>';
+        + '<button class="btn btn-secondary btn-sm" data-action="openFile" data-path="' + esc(f) + '">' + t('Buka','Open') + '</button></div>';
     }).join('');
-    return '<div class="sec">Generate panduan developer</div>'
-      + '<div class="info">Copilot Agent akan membuat tiga file panduan siap pakai untuk developer yang mengerjakan proyek ini.</div>'
+    return '<div class="sec">' + t('Generate panduan developer','Generate developer guides') + '</div>'
+      + '<div class="info">' + t('Copilot Agent akan membuat tiga file panduan siap pakai untuk developer yang mengerjakan proyek ini.','Copilot Agent will create three ready-to-use guide files for developers working on this project.') + '</div>'
       + guideRows
-      + '<button class="btn btn-primary" data-action="generateAll" style="margin-top:10px">&#9889; Generate panduan (backend, frontend, Copilot instructions)</button>'
+      + '<button class="btn btn-primary" data-action="generateAll" style="margin-top:10px">&#9889; ' + t('Generate panduan (backend, frontend, Copilot instructions)','Generate guides (backend, frontend, Copilot instructions)') + '</button>'
       + '<hr class="divider"/>'
-      + '<button class="btn btn-primary" data-action="goStep" data-step="6">Lanjut ke Scaffold Project &#8594;</button>'
-      + '<button class="btn btn-secondary" data-action="goStep" data-step="3">&#8592; Kembali ke halaman</button>';
+      + '<button class="btn btn-primary" data-action="goStep" data-step="6">' + t('Lanjut ke Scaffold Project &#8594;','Continue to Scaffold Project &#8594;') + '</button>'
+      + '<button class="btn btn-secondary" data-action="goStep" data-step="3">&#8592; ' + t('Kembali ke halaman','Back to pages') + '</button>';
   }
 
   /* ── Step 6 ── */
   function renderStep6() {
-    const stack = S.selectedStack || '(belum dipilih)';
+    const stack = S.selectedStack || t('(belum dipilih)','(not set)');
     const safeName = (S.projectName || '').toLowerCase().replace(/[^a-z0-9-_]/g, '-');
     const pageRows = S.pages.map(function(p) {
       const f = p.toLowerCase().replace(/\s+/g, '-');
@@ -952,25 +959,26 @@ code{font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
         + '<button class="btn btn-secondary btn-sm" data-action="previewPage" data-page="' + esc(p) + '">Preview</button></div>';
     }).join('');
     return '<div class="sec">Scaffold Project</div>'
-      + '<div class="info">Copilot Agent akan menjalankan perintah scaffold, membuat struktur folder dan file awal di <code>project/</code>, serta menyesuaikan konfigurasi berdasarkan panduan yang sudah dibuat.</div>'
+      + '<div class="info">' + t('Copilot Agent akan menjalankan perintah scaffold, membuat struktur folder dan file awal di','Copilot Agent will run the scaffold command, create the folder structure and initial files in') + ' <code>project/</code>, ' + t('serta menyesuaikan konfigurasi berdasarkan panduan yang sudah dibuat.','and configure based on the guides already created.') + '</div>'
       + '<div class="file-row"><div style="display:flex;align-items:center"><div class="dot dot-done"></div>'
       + '<span style="font-size:12px">Stack: <strong>' + esc(stack) + '</strong></span></div></div>'
       + '<div class="file-row"><div style="display:flex;align-items:center"><div class="dot dot-done"></div>'
       + '<span style="font-size:12px">Target folder: <code>project/' + esc(safeName) + '/</code></span></div></div>'
-      + (pageRows ? '<div class="sec" style="margin-top:8px">HTML prototype siap</div>' + pageRows : '')
+      + (pageRows ? '<div class="sec" style="margin-top:8px">' + t('HTML prototype siap','HTML prototypes ready') + '</div>' + pageRows : '')
       + '<hr class="divider"/>'
-      + '<button class="btn btn-primary" data-action="scaffoldProject" style="margin-top:4px">&#9889; Generate scaffold project &#8594;</button>'
+      + '<button class="btn btn-primary" data-action="scaffoldProject" style="margin-top:4px">&#9889; ' + t('Generate scaffold project &#8594;','Generate project scaffold &#8594;') + '</button>'
       + '<hr class="divider"/>'
-      + '<div class="sec">Setelah scaffold</div>'
-      + '<div class="info warn">Buka folder <code>project/</code> sebagai workspace baru, lalu gunakan panduan developer untuk mulai coding bersama Copilot.</div>'
+      + '<div class="sec">' + t('Setelah scaffold','After scaffold') + '</div>'
+      + '<div class="info warn">' + t('Buka folder','Open the') + ' <code>project/</code> ' + t('sebagai workspace baru, lalu gunakan panduan developer untuk mulai coding bersama Copilot.','folder as a new workspace, then use the developer guides to start coding with Copilot.') + '</div>'
       + '<button class="btn btn-secondary" data-action="openFile" data-path="docs/copilot-guides/backend-guide.md">&#128196; Backend guide</button>'
       + '<button class="btn btn-secondary" data-action="openFile" data-path="docs/copilot-guides/frontend-guide.md">&#128196; Frontend guide</button>'
-      + '<button class="btn btn-secondary" data-action="goStep" data-step="5">&#8592; Kembali ke panduan</button>';
+      + '<button class="btn btn-secondary" data-action="goStep" data-step="5">&#8592; ' + t('Kembali ke panduan','Back to guides') + '</button>';
   }
 
   /* ── Utils ── */
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
   function esc(s) { return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+  function t(id, en) { return (S && S.language === 'en') ? en : id; }
   function showToast(msg, level) {
     const t = document.getElementById('toast');
     if (!t) { return; }
