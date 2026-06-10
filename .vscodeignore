@@ -1,0 +1,17 @@
+# Source TypeScript files — compiled to out/ already
+src/
+tsconfig.json
+
+# Dev tooling
+node_modules/
+.vscode/
+.github/
+.gitignore
+
+# Build artifacts not needed in package
+*.map
+*.vsix
+
+# Docs and misc
+*.md
+!README.md

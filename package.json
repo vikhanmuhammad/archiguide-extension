@@ -2,8 +2,12 @@
   "name": "archiguide",
   "displayName": "ArchiGuide",
   "description": "System design assistant — from idea to project scaffold",
-  "version": "0.0.1",
-  "publisher": "vikhanmuhammad",
+  "version": "0.0.2",
+  "publisher": "vikhandev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vikhanmuhammad/archiguide"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },

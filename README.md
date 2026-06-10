@@ -1,78 +1,185 @@
-# ArchiGuide — Panduan Setup & Penggunaan
+# ArchiGuide
 
-## Prasyarat
-- Node.js (sudah terinstall)
-- VSCode
-- GitHub Copilot (aktif di VSCode)
+**From idea to project scaffold — guided by Copilot Agent.**
+
+ArchiGuide is a VSCode extension that guides you from a system idea to real scaffolded code, using GitHub Copilot Agent as the executor at every step.
+
+> **Requires:** GitHub Copilot (active) · VSCode 1.90+
 
 ---
 
-## Langkah 1 — Install dependencies
+## Installation
 
-Buka terminal di folder `archiguide/`, lalu jalankan:
+Search for **ArchiGuide** in the VSCode Extensions Marketplace and click **Install**.
 
-```bash
-npm install
+Or via Command Palette (`Ctrl+Shift+P`):
+```
+ext install vikhandev.archiguide
 ```
 
 ---
 
-## Langkah 2 — Compile TypeScript
+## How it works
+
+After installing, click the **ArchiGuide** icon (triangle "A") in the left Activity Bar.
+
+ArchiGuide guides you through 6 steps:
+
+### Step 1 — Input & References
+- Enter your project name and system description
+- Optionally attach specification documents (PDF, MD, DOCX) as reference
+- Copilot Agent creates `docs/FSD.md` (for stakeholders) and `docs/flow.md` (for developers)
+
+### Step 2 — Documents & Style
+- Review the generated documents
+- Describe the visual style you want (colors, fonts, look & feel)
+- Copilot Agent creates `.archiguide/design-tokens.json`
+
+### Step 3 — Page Design
+- Pages are auto-detected from `docs/flow.md`
+- Add or remove pages manually as needed
+- Copilot Agent generates an HTML prototype for each page in `docs/design/`
+
+### Step 4 — Tech Stack
+- Enter the stack you want to use (any combination: Laravel + Vue, Next.js, Django, etc.)
+- Quick presets available for popular stacks
+
+### Step 5 — Generate Developer Guides
+- Copilot Agent creates three guide files:
+  - `docs/copilot-guides/backend-guide.md` — ready-to-use backend prompts
+  - `docs/copilot-guides/frontend-guide.md` — HTML-to-component conversion guide
+  - `.github/copilot-instructions.md` — auto-loaded context for every Copilot request
+
+### Step 6 — Scaffold Project
+- Copilot Agent runs the scaffold command for your chosen stack
+- Folder structure and initial files are created inside `project/`
+- Ready to develop with Copilot using the generated guides
+
+---
+
+## Output folder structure
+
+```
+workspace/
+├── .archiguide/
+│   ├── config.json              ← ArchiGuide state
+│   └── design-tokens.json       ← colors, fonts, border-radius
+├── .github/
+│   └── copilot-instructions.md  ← auto-loaded Copilot context
+├── docs/
+│   ├── FSD.md                   ← functional specification
+│   ├── flow.md                  ← technical flow document
+│   ├── references/              ← attached reference documents
+│   ├── design/
+│   │   └── *.html               ← HTML prototype per page
+│   └── copilot-guides/
+│       ├── backend-guide.md
+│       └── frontend-guide.md
+└── project/                     ← scaffolded framework code
+```
+
+---
+
+## Language
+
+ArchiGuide supports **English** and **Bahasa Indonesia**. Toggle the language using the button in the top-right corner of the sidebar.
+
+---
+
+## Requirements
+
+- **VSCode** 1.90 or later
+- **GitHub Copilot** installed and active (required for generating documents, designs, and scaffold)
+
+---
+
+## For Developers
+
+Want to contribute or modify the extension?
 
 ```bash
+git clone https://github.com/vikhanmuhammad/archiguide
+cd archiguide
+npm install
 npm run compile
 ```
 
-Atau gunakan mode watch (otomatis compile setiap ada perubahan):
+Press **F5** in VSCode to open an Extension Development Host.
 
+| File | Role |
+|------|------|
+| `src/extension.ts` | Entry point, command registration |
+| `src/sidebarProvider.ts` | Sidebar UI & message handlers |
+| `src/promptBuilder.ts` | Copilot prompt templates |
+| `src/stateManager.ts` | State, file I/O, workspace setup |
+| `src/fileGenerator.ts` | Copilot response parser → files |
+
+After any change in `src/` → `npm run compile` → **Ctrl+R** in the Extension Host window.
+
+To build a `.vsix` file:
 ```bash
-npm run watch
+npx vsce package
+```
+
+---
+---
+
+# ArchiGuide
+
+**Dari ide sistem hingga scaffold project — dipandu Copilot Agent.**
+
+ArchiGuide adalah VSCode extension yang memandu Anda membangun sistem dari deskripsi ide hingga scaffold kode nyata, menggunakan GitHub Copilot Agent sebagai eksekutor di setiap langkah.
+
+> **Diperlukan:** GitHub Copilot (aktif) · VSCode 1.90+
+
+---
+
+## Instalasi
+
+Cari **ArchiGuide** di VSCode Extensions Marketplace, lalu klik **Install**.
+
+Atau via Command Palette (`Ctrl+Shift+P`):
+```
+ext install vikhandev.archiguide
 ```
 
 ---
 
-## Langkah 3 — Jalankan extension
+## Cara penggunaan
 
-1. Buka folder `archiguide/` di VSCode:
-   ```bash
-   code .
-   ```
+Setelah install, klik ikon **ArchiGuide** (segitiga "A") di Activity Bar kiri.
 
-2. Tekan **F5** (atau menu Run → Start Debugging)
+ArchiGuide membimbing Anda melalui 6 langkah:
 
-3. Sebuah jendela VSCode baru akan terbuka — ini adalah **Extension Development Host**
+### Step 1 — Input & Referensi
+- Masukkan nama proyek dan deskripsi sistem
+- Lampirkan dokumen spesifikasi (PDF, MD, DOCX) sebagai referensi opsional
+- Copilot Agent membuat `docs/FSD.md` (untuk stakeholder) dan `docs/flow.md` (untuk developer)
 
-4. Di jendela baru tersebut, **buka folder project yang ingin Anda buat** (File → Open Folder)
+### Step 2 — Dokumen & Style
+- Review dokumen yang dihasilkan
+- Deskripsikan tampilan visual yang diinginkan (warna, font, gaya)
+- Copilot Agent membuat `.archiguide/design-tokens.json`
 
-5. Klik ikon **ArchiGuide** (segitiga "A") di Activity Bar kiri
+### Step 3 — Desain Halaman
+- Halaman terdeteksi otomatis dari `docs/flow.md`
+- Tambah atau hapus halaman secara manual
+- Copilot Agent membuat HTML prototype untuk setiap halaman di `docs/design/`
 
----
+### Step 4 — Tech Stack
+- Masukkan stack yang akan digunakan (bebas: Laravel + Vue, Next.js, Django, dll.)
+- Tersedia preset cepat untuk stack populer
 
-## Langkah 4 — Mulai gunakan ArchiGuide
+### Step 5 — Generate Panduan Developer
+- Copilot Agent membuat tiga file panduan:
+  - `docs/copilot-guides/backend-guide.md` — prompt siap pakai untuk backend
+  - `docs/copilot-guides/frontend-guide.md` — panduan konversi HTML ke komponen
+  - `.github/copilot-instructions.md` — konteks otomatis untuk setiap Copilot request
 
-### Step 1 — Input sistem
-- Isi nama proyek dan deskripsi sistem
-- Klik "Lanjut — buat dokumen"
-- File `docs/FSD.md` dan `docs/flow.md` otomatis terbuat di workspace
-
-### Step 2 — Dokumen & tema
-- Buka dan review `FSD.md` / `flow.md`
-- Pilih tema visual (Indigo / Emerald / Rose / Slate)
-
-### Step 3 — Desain halaman
-- Tambah nama halaman satu per satu (contoh: Dashboard, Login, Inventory)
-- Klik ikon 👁 untuk preview langsung di VSCode
-- Klik 📝 untuk buka dan edit HTML-nya
-- Klik "Generate semua HTML & lanjut" ketika sudah selesai
-
-### Step 4 — Tech stack
-- Pilih framework yang akan digunakan
-
-### Step 5 — Generate proyek
-- Klik "Generate semua"
-- Copilot guides terbuat di `docs/copilot-guides/`
-- Scaffold project berjalan di terminal
-- Buka `docs/copilot-guides/backend-guide.md` — copy prompt ke Copilot Chat untuk mulai coding
+### Step 6 — Scaffold Project
+- Copilot Agent menjalankan perintah scaffold sesuai stack yang dipilih
+- Struktur folder dan file awal dibuat di `project/`
+- Siap dikembangkan dengan Copilot menggunakan panduan yang sudah dibuat
 
 ---
 
@@ -81,43 +188,61 @@ npm run watch
 ```
 workspace/
 ├── .archiguide/
-│   ├── config.json          ← state ArchiGuide
-│   └── design-tokens.json   ← token warna, font, radius
+│   ├── config.json              ← state ArchiGuide
+│   └── design-tokens.json       ← warna, font, border-radius
 ├── .github/
-│   └── copilot-instructions.md  ← konteks otomatis untuk Copilot
+│   └── copilot-instructions.md  ← konteks otomatis Copilot
 ├── docs/
-│   ├── FSD.md               ← dokumen untuk stakeholder
-│   ├── flow.md              ← dokumen teknis
+│   ├── FSD.md                   ← spesifikasi fungsional
+│   ├── flow.md                  ← dokumen teknis & alur
+│   ├── references/              ← dokumen referensi yang dilampirkan
 │   ├── design/
-│   │   ├── dashboard.html   ← prototype HTML tiap halaman
-│   │   └── login.html
+│   │   └── *.html               ← HTML prototype per halaman
 │   └── copilot-guides/
-│       ├── backend-guide.md     ← prompt siap pakai untuk Copilot
+│       ├── backend-guide.md
 │       └── frontend-guide.md
-└── project/                 ← scaffold framework
+└── project/                     ← scaffold framework
 ```
 
 ---
 
-## Cara pakai Copilot guides
+## Bahasa
 
-1. Buka `docs/copilot-guides/backend-guide.md`
-2. Copy salah satu blok prompt (misalnya "Prompt: Buat Model & Migration")
-3. Buka **Copilot Chat** di secondary sidebar VSCode
-4. Paste prompt — Copilot sudah punya konteks penuh proyek Anda
+ArchiGuide mendukung **Bahasa Indonesia** (default) dan **English**. Toggle bahasa tersedia di pojok kanan atas sidebar.
 
 ---
 
-## Development — edit extension
+## Persyaratan
 
-File utama yang bisa Anda modifikasi:
+- **VSCode** 1.90 atau lebih baru
+- **GitHub Copilot** terinstall dan aktif (diperlukan untuk generate dokumen, desain, dan scaffold)
+
+---
+
+## Untuk Developer
+
+Ingin berkontribusi atau memodifikasi extension?
+
+```bash
+git clone https://github.com/vikhanmuhammad/archiguide
+cd archiguide
+npm install
+npm run compile
+```
+
+Tekan **F5** di VSCode untuk membuka Extension Development Host.
 
 | File | Fungsi |
 |------|--------|
 | `src/extension.ts` | Entry point, registrasi command |
-| `src/sidebarProvider.ts` | UI sidebar (HTML + logic pesan) |
-| `src/promptBuilder.ts` | Semua template dokumen & prompt |
-| `src/stateManager.ts` | State, file I/O, tema, stack |
+| `src/sidebarProvider.ts` | UI sidebar & message handler |
+| `src/promptBuilder.ts` | Template prompt untuk Copilot |
+| `src/stateManager.ts` | State, file I/O, workspace setup |
+| `src/fileGenerator.ts` | Parser respons Copilot → file |
 
-Setiap perubahan di `src/` → jalankan `npm run compile` → tekan **Ctrl+R** di jendela Extension Host untuk reload.
-"# archiguide-extension" 
+Setiap perubahan di `src/` → `npm run compile` → **Ctrl+R** di jendela Extension Host.
+
+Untuk build file `.vsix`:
+```bash
+npx vsce package
+```
